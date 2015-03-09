@@ -1123,7 +1123,34 @@ class DELTA_DFCM_NNN40_OTA(NRF51822):
         self.MERGE_SOFT_DEVICE = False
         self.macros += self.common_macros
 
+class BUDDI_BLUEBAND(NRF51822):
+    def __init__(self):
+        NRF51822.__init__(self)
+        self.extra_labels = ['NORDIC', 'MCU_NRF51822', 'MCU_NORDIC_32K']
+        self.macros = ['TARGET_NRF51822']
+        self.macros += self.common_macros
 
+class BUDDI_BLUEBAND_BOOT(NRF51822):
+    def __init__(self):
+        NRF51822.__init__(self)
+        self.core = "Cortex-M0"
+        self.extra_labels = ['NORDIC', 'MCU_NRF51822', 'MCU_NORDIC_32K', 'BUDDI_BLUEBAND']
+        self.macros = ['TARGET_NRF51822', 'TARGET_BUDDI_BLUEBAND', 'TARGET_OTA_ENABLED']
+        self.macros += self.common_macros
+        self.supported_toolchains = ["ARM", "GCC_ARM"]
+        self.MERGE_SOFT_DEVICE = True
+        self.MERGE_BOOTLOADER = True
+
+class BUDDI_BLUEBAND_OTA(NRF51822):
+    def __init__(self):
+        NRF51822.__init__(self)
+        self.core = "Cortex-M0"
+        self.extra_labels = ['NORDIC', 'MCU_NRF51822', 'MCU_NORDIC_32K', 'BUDDI_BLUEBAND']
+        self.macros = ['TARGET_NRF51822', 'TARGET_BUDDI_BLUEBAND', 'TARGET_OTA_ENABLED']
+        self.macros += self.common_macros
+        self.supported_toolchains = ["ARM", "GCC_ARM"]
+        self.MERGE_SOFT_DEVICE = False
+        
 ### ARM ###
 
 class ARM_MPS2_Target(Target):
@@ -1399,6 +1426,9 @@ TARGETS = [
     WALLBOT_BLE(),  # nRF51822
     DELTA_DFCM_NNN40(), # nRF51822
     DELTA_DFCM_NNN40_OTA(), # nRF51822
+    BUDDI_BLUEBAND(), # nRF51822
+    BUDDI_BLUEBAND_BOOT(), # nRF51822
+    BUDDI_BLUEBAND_OTA(), # nRF51822
 
     ### ARM ###
     ARM_MPS2_M0(),
