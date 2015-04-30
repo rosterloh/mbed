@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------
- *      RL-ARM - RTX
+ *      CMSIS-RTOS  -  RTX
  *----------------------------------------------------------------------------
  *      Name:    RT_TASK.C
  *      Purpose: Task functions and system start up.
- *      Rev.:    V4.60
+ *      Rev.:    V4.75
  *----------------------------------------------------------------------------
  *
- * Copyright (c) 1999-2009 KEIL, 2009-2012 ARM Germany GmbH
+ * Copyright (c) 1999-2009 KEIL, 2009-2014 ARM Germany GmbH
  * All rights reserved.
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -15,25 +15,25 @@
  *  - Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- *  - Neither the name of ARM  nor the names of its contributors may be used
- *    to endorse or promote products derived from this software without
+ *  - Neither the name of ARM  nor the names of its contributors may be used 
+ *    to endorse or promote products derived from this software without 
  *    specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" 
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDERS AND CONTRIBUTORS BE
  * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*/
 
 #include "rt_TypeDef.h"
-#include "RTX_Conf.h"
+#include "RTX_Config.h"
 #include "rt_System.h"
 #include "rt_Task.h"
 #include "rt_List.h"
@@ -56,7 +56,7 @@ struct OS_TCB os_idle_TCB;
  *      Local Functions
  *---------------------------------------------------------------------------*/
 
-OS_TID rt_get_TID (void) {
+static OS_TID rt_get_TID (void) {
   U32 tid;
 
   for (tid = 1; tid <= os_maxtaskrun; tid++) {
@@ -67,37 +67,30 @@ OS_TID rt_get_TID (void) {
   return (0);
 }
 
-#if defined (__CC_ARM) && !defined (__MICROLIB)
-/*--------------------------- __user_perthread_libspace ---------------------*/
-extern void  *__libspace_start;
-
-void *__user_perthread_libspace (void) {
-  /* Provide a separate libspace for each task. */
-  if (os_tsk.run == NULL) {
-    /* RTX not running yet. */
-    return (&__libspace_start);
-  }
-  return (void *)(os_tsk.run->std_libspace);
-}
-#endif
 
 /*--------------------------- rt_init_context -------------------------------*/
 
-void rt_init_context (P_TCB p_TCB, U8 priority, FUNCP task_body) {
+static void rt_init_context (P_TCB p_TCB, U8 priority, FUNCP task_body) {
   /* Initialize general part of the Task Control Block. */
-  p_TCB->cb_type = TCB;
-  p_TCB->state   = READY;
-  p_TCB->prio    = priority;
-  p_TCB->p_lnk   = NULL;
-  p_TCB->p_rlnk  = NULL;
-  p_TCB->p_dlnk  = NULL;
-  p_TCB->p_blnk  = NULL;
+  p_TCB->cb_type   = TCB;
+  p_TCB->state     = READY;
+  p_TCB->prio      = priority;
+  p_TCB->prio_base = priority;
+  p_TCB->p_lnk     = NULL;
+  p_TCB->p_rlnk    = NULL;
+  p_TCB->p_dlnk    = NULL;
+  p_TCB->p_blnk    = NULL;
+  p_TCB->p_mlnk    = NULL;
   p_TCB->delta_time    = 0;
   p_TCB->interval_time = 0;
   p_TCB->events  = 0;
   p_TCB->waits   = 0;
   p_TCB->stack_frame = 0;
 
+  if (p_TCB->priv_stack == 0) {
+    /* Allocate the memory space for the stack. */
+    p_TCB->stack = rt_alloc_box (mp_stk);
+  }
   rt_init_stack (p_TCB, task_body);
 }
 
@@ -106,7 +99,7 @@ void rt_init_context (P_TCB p_TCB, U8 priority, FUNCP task_body) {
 
 void rt_switch_req (P_TCB p_new) {
   /* Switch to next task (identified by "p_new"). */
-  os_tsk.new_tsk   = p_new;
+  os_tsk.new   = p_new;
   p_new->state = RUNNING;
   DBG_TASK_SWITCH(p_new->task_id);
 }
@@ -192,7 +185,8 @@ OS_RESULT rt_tsk_prio (OS_TID task_id, U8 new_prio) {
 
   if (task_id == 0) {
     /* Change execution priority of calling task. */
-    os_tsk.run->prio = new_prio;
+    os_tsk.run->prio      = new_prio;
+    os_tsk.run->prio_base = new_prio;
 run:if (rt_rdy_prio() > new_prio) {
       rt_put_prio (&os_rdy, os_tsk.run);
       os_tsk.run->state   = READY;
@@ -207,7 +201,8 @@ run:if (rt_rdy_prio() > new_prio) {
     return (OS_R_NOK);
   }
   p_task = os_active_TCB[task_id-1];
-  p_task->prio = new_prio;
+  p_task->prio      = new_prio;
+  p_task->prio_base = new_prio;
   if (p_task == os_tsk.run) {
     goto run;
   }
@@ -220,21 +215,84 @@ run:if (rt_rdy_prio() > new_prio) {
   return (OS_R_OK);
 }
 
+
+/*--------------------------- rt_tsk_create ---------------------------------*/
+
+OS_TID rt_tsk_create (FUNCP task, U32 prio_stksz, void *stk, void *argv) {
+  /* Start a new task declared with "task". */
+  P_TCB task_context;
+  U32 i;
+
+  /* Priority 0 is reserved for idle task! */
+  if ((prio_stksz & 0xFF) == 0) {
+    prio_stksz += 1;
+  }
+  task_context = rt_alloc_box (mp_tcb);
+  if (task_context == NULL) {
+    return (0);
+  }
+  /* If "size != 0" use a private user provided stack. */
+  task_context->stack      = stk;
+  task_context->priv_stack = prio_stksz >> 8;
+  /* Pass parameter 'argv' to 'rt_init_context' */
+  task_context->msg = argv;
+  /* For 'size == 0' system allocates the user stack from the memory pool. */
+  rt_init_context (task_context, prio_stksz & 0xFF, task);
+
+  /* Find a free entry in 'os_active_TCB' table. */
+  i = rt_get_TID ();
+  os_active_TCB[i-1] = task_context;
+  task_context->task_id = i;
+  DBG_TASK_NOTIFY(task_context, __TRUE);
+  rt_dispatch (task_context);
+  return ((OS_TID)i);
+}
+
+
 /*--------------------------- rt_tsk_delete ---------------------------------*/
 
 OS_RESULT rt_tsk_delete (OS_TID task_id) {
   /* Terminate the task identified with "task_id". */
-  P_TCB task_context;
+  P_TCB  task_context;
+  P_TCB  p_TCB;
+  P_MUCB p_MCB, p_MCB0;
 
   if (task_id == 0 || task_id == os_tsk.run->task_id) {
     /* Terminate itself. */
     os_tsk.run->state     = INACTIVE;
     os_tsk.run->tsk_stack = rt_get_PSP ();
     rt_stk_check ();
+    p_MCB = os_tsk.run->p_mlnk;
+    while (p_MCB) {
+      /* Release mutexes owned by this task */
+      if (p_MCB->p_lnk) {
+        /* A task is waiting for mutex. */
+        p_TCB = rt_get_first ((P_XCB)p_MCB);
+#ifdef __CMSIS_RTOS
+        rt_ret_val(p_TCB, 0/*osOK*/);
+#else
+        rt_ret_val(p_TCB, OS_R_MUT); 
+#endif
+        rt_rmv_dly (p_TCB);
+        p_TCB->state = READY;
+        rt_put_prio (&os_rdy, p_TCB);
+        /* A waiting task becomes the owner of this mutex. */
+        p_MCB0 = p_MCB;
+        p_MCB->level  = 1;
+        p_MCB->owner  = p_TCB;
+        p_MCB->p_mlnk = p_TCB->p_mlnk;
+        p_TCB->p_mlnk = p_MCB; 
+        p_MCB = p_MCB0->p_mlnk;
+      }
+      else {
+        p_MCB = p_MCB->p_mlnk;
+      }
+    }
     os_active_TCB[os_tsk.run->task_id-1] = NULL;
-
+    rt_free_box (mp_stk, os_tsk.run->stack);
     os_tsk.run->stack = NULL;
     DBG_TASK_NOTIFY(os_tsk.run, __FALSE);
+    rt_free_box (mp_tcb, os_tsk.run);
     os_tsk.run = NULL;
     rt_dispatch (NULL);
     /* The program should never come to this point. */
@@ -248,10 +306,43 @@ OS_RESULT rt_tsk_delete (OS_TID task_id) {
     task_context = os_active_TCB[task_id-1];
     rt_rmv_list (task_context);
     rt_rmv_dly (task_context);
+    p_MCB = task_context->p_mlnk;
+    while (p_MCB) {
+      /* Release mutexes owned by this task */
+      if (p_MCB->p_lnk) {
+        /* A task is waiting for mutex. */
+        p_TCB = rt_get_first ((P_XCB)p_MCB);
+#ifdef __CMSIS_RTOS
+        rt_ret_val(p_TCB, 0/*osOK*/);
+#else
+        rt_ret_val(p_TCB, OS_R_MUT); 
+#endif
+        rt_rmv_dly (p_TCB);
+        p_TCB->state = READY;
+        rt_put_prio (&os_rdy, p_TCB);
+        /* A waiting task becomes the owner of this mutex. */
+        p_MCB0 = p_MCB;
+        p_MCB->level  = 1;
+        p_MCB->owner  = p_TCB;
+        p_MCB->p_mlnk = p_TCB->p_mlnk;
+        p_TCB->p_mlnk = p_MCB; 
+        p_MCB = p_MCB0->p_mlnk;
+      }
+      else {
+        p_MCB = p_MCB->p_mlnk;
+      }
+    }
     os_active_TCB[task_id-1] = NULL;
-
+    rt_free_box (mp_stk, task_context->stack);
     task_context->stack = NULL;
     DBG_TASK_NOTIFY(task_context, __FALSE);
+    rt_free_box (mp_tcb, task_context);
+    if (rt_rdy_prio() > os_tsk.run->prio) {
+      /* Ready task has higher priority than running task. */
+      os_tsk.run->state = READY;
+      rt_put_prio (&os_rdy, os_tsk.run);
+      rt_dispatch (NULL);
+    }
   }
   return (OS_R_OK);
 }
@@ -273,11 +364,13 @@ void rt_sys_init (FUNCP first_task, U32 prio_stksz, void *stk) {
   for (i = 0; i < os_maxtaskrun; i++) {
     os_active_TCB[i] = NULL;
   }
+  rt_init_box (&mp_tcb, mp_tcb_size, sizeof(struct OS_TCB));
+  rt_init_box (&mp_stk, mp_stk_size, BOX_ALIGN_8 | (U16)(os_stackinfo));
+  rt_init_box ((U32 *)m_tmr, mp_tmr_size, sizeof(struct OS_TMR));
 
   /* Set up TCB of idle demon */
-  os_idle_TCB.task_id = 255;
-  os_idle_TCB.priv_stack = idle_task_stack_size;
-  os_idle_TCB.stack = idle_task_stack;
+  os_idle_TCB.task_id    = 255;
+  os_idle_TCB.priv_stack = 0;
   rt_init_context (&os_idle_TCB, 0, os_idle_demon);
 
   /* Set up ready list: initially empty */
@@ -289,7 +382,7 @@ void rt_sys_init (FUNCP first_task, U32 prio_stksz, void *stk) {
   os_dly.p_blnk  = NULL;
   os_dly.delta_time = 0;
 
-  /* Fix SP and systemvariables to assume idle task is running  */
+  /* Fix SP and system variables to assume idle task is running */
   /* Transform main program into idle task by assuming idle TCB */
 #ifndef __CMSIS_RTOS
   rt_set_PSP (os_idle_TCB.tsk_stack+32);
@@ -304,10 +397,10 @@ void rt_sys_init (FUNCP first_task, U32 prio_stksz, void *stk) {
 
   rt_init_robin ();
 
+#ifndef __CMSIS_RTOS
   /* Intitialize SVC and PendSV */
   rt_svc_init ();
 
-#ifndef __CMSIS_RTOS
   /* Intitialize and start system clock timer */
   os_tick_irqn = os_tick_init ();
   if (os_tick_irqn >= 0) {
@@ -325,6 +418,9 @@ void rt_sys_init (FUNCP first_task, U32 prio_stksz, void *stk) {
 #ifdef __CMSIS_RTOS
 void rt_sys_start (void) {
   /* Start system */
+
+  /* Intitialize SVC and PendSV */
+  rt_svc_init ();
 
   /* Intitialize and start system clock timer */
   os_tick_irqn = os_tick_init ();

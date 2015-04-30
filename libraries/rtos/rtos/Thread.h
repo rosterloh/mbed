@@ -39,7 +39,7 @@ public:
     */
     Thread(void (*task)(void const *argument), void *argument=NULL,
            osPriority priority=osPriorityNormal,
-           uint32_t stack_size=DEFAULT_STACK_SIZE,
+           uint32_t stack_size=0/*DEFAULT_STACK_SIZE*/,
            unsigned char *stack_pointer=NULL);
 
     /** Terminate execution of a thread and remove it from Active Threads
@@ -82,6 +82,7 @@ public:
         WaitingSemaphore,   /**< Waiting for a semaphore event to occur */
         WaitingMailbox,     /**< Waiting for a mailbox event to occur */
         WaitingMutex,       /**< Waiting for a mutex event to occur */
+	Unknown
     };
 
     /** State of this Thread
@@ -137,7 +138,7 @@ public:
 private:
     osThreadId _tid;
     osThreadDef_t _thread_def;
-    bool _dynamic_stack;
+    //bool _dynamic_stack;
 };
 
 }

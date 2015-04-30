@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------
- *      RL-ARM - RTX
+ *      CMSIS-RTOS  -  RTX
  *----------------------------------------------------------------------------
  *      Name:    RT_SYSTEM.C
  *      Purpose: System Task Manager
- *      Rev.:    V4.60
+ *      Rev.:    V4.78
  *----------------------------------------------------------------------------
  *
- * Copyright (c) 1999-2009 KEIL, 2009-2012 ARM Germany GmbH
+ * Copyright (c) 1999-2009 KEIL, 2009-2015 ARM Germany GmbH
  * All rights reserved.
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -15,25 +15,25 @@
  *  - Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- *  - Neither the name of ARM  nor the names of its contributors may be used
- *    to endorse or promote products derived from this software without
+ *  - Neither the name of ARM  nor the names of its contributors may be used 
+ *    to endorse or promote products derived from this software without 
  *    specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" 
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDERS AND CONTRIBUTORS BE
  * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*/
 
 #include "rt_TypeDef.h"
-#include "RTX_Conf.h"
+#include "RTX_Config.h"
 #include "rt_Task.h"
 #include "rt_System.h"
 #include "rt_Event.h"
@@ -41,6 +41,7 @@
 #include "rt_Mailbox.h"
 #include "rt_Semaphore.h"
 #include "rt_Time.h"
+#include "rt_Timer.h"
 #include "rt_Robin.h"
 #include "rt_HAL_CM.h"
 
@@ -62,28 +63,39 @@ static          U8  pend_flags;
  *      Global Functions
  *---------------------------------------------------------------------------*/
 
+#define RL_RTX_VER      0x478
+
 #if defined (__CC_ARM)
 __asm void $$RTX$$version (void) {
    /* Export a version number symbol for a version control. */
 
                 EXPORT  __RL_RTX_VER
 
-__RL_RTX_VER    EQU     0x450
+__RL_RTX_VER    EQU     RL_RTX_VER
 }
 #endif
 
 
 /*--------------------------- rt_suspend ------------------------------------*/
+
+extern U32 sysUserTimerWakeupTime(void);
+
 U32 rt_suspend (void) {
   /* Suspend OS scheduler */
   U32 delta = 0xFFFF;
+#ifdef __CMSIS_RTOS
+  U32 sleep;
+#endif
 
   rt_tsk_lock();
-
+  
   if (os_dly.p_dlnk) {
     delta = os_dly.delta_time;
   }
-#ifndef __CMSIS_RTOS
+#ifdef __CMSIS_RTOS
+  sleep = sysUserTimerWakeupTime();
+  if (sleep < delta) delta = sleep;
+#else
   if (os_tmr.next) {
     if (os_tmr.tcnt < delta) delta = os_tmr.tcnt;
   }
@@ -94,6 +106,9 @@ U32 rt_suspend (void) {
 
 
 /*--------------------------- rt_resume -------------------------------------*/
+
+extern void sysUserTimerUpdate (U32 sleep_time);
+
 void rt_resume (U32 sleep_time) {
   /* Resume OS scheduler after suspend */
   P_TCB next;
@@ -125,8 +140,10 @@ void rt_resume (U32 sleep_time) {
     os_time += sleep_time;
   }
 
-#ifndef __CMSIS_RTOS
   /* Check the user timers. */
+#ifdef __CMSIS_RTOS
+  sysUserTimerUpdate(sleep_time);
+#else
   if (os_tmr.next) {
     delta = sleep_time;
     if (delta >= os_tmr.tcnt) {
@@ -238,10 +255,23 @@ void rt_pop_req (void) {
 
 __weak int os_tick_init (void) {
   /* Initialize SysTick timer as system tick timer. */
-  rt_systick_init ();
+  rt_systick_init();
   return (-1);  /* Return IRQ number of SysTick timer */
 }
 
+/*--------------------------- os_tick_val -----------------------------------*/
+
+__weak U32 os_tick_val (void) {
+  /* Get SysTick timer current value (0 .. OS_TRV). */
+  return rt_systick_val();
+}
+
+/*--------------------------- os_tick_ovf -----------------------------------*/
+
+__weak U32 os_tick_ovf (void) {
+  /* Get SysTick timer overflow flag */
+  return rt_systick_ovf();
+}
 
 /*--------------------------- os_tick_irqack --------------------------------*/
 
@@ -281,19 +311,15 @@ void rt_systick (void) {
 }
 
 /*--------------------------- rt_stk_check ----------------------------------*/
+
 __weak void rt_stk_check (void) {
-    /* Check for stack overflow. */
-    if (os_tsk.run->task_id == 0x01) {
-        // TODO: For the main thread the check should be done against the main heap pointer
-    } else {
-        if ((os_tsk.run->tsk_stack < (U32)os_tsk.run->stack) ||
-            (os_tsk.run->stack[0] != MAGIC_WORD)) {
-            os_error (OS_ERR_STK_OVF);
-        }
-    }
+  /* Check for stack overflow. */
+  if ((os_tsk.run->tsk_stack < (U32)os_tsk.run->stack) || 
+      (os_tsk.run->stack[0] != MAGIC_WORD)) {
+    os_error (OS_ERR_STK_OVF);
+  }
 }
 
 /*----------------------------------------------------------------------------
  * end of file
  *---------------------------------------------------------------------------*/
-

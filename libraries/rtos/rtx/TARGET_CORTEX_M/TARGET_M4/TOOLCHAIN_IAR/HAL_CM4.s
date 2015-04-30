@@ -15,26 +15,26 @@
  *  - Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- *  - Neither the name of ARM  nor the names of its contributors may be used
- *    to endorse or promote products derived from this software without
+ *  - Neither the name of ARM  nor the names of its contributors may be used 
+ *    to endorse or promote products derived from this software without 
  *    specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" 
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDERS AND CONTRIBUTORS BE
  * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*/
 
         NAME    HAL_CM4.S
 
-        #define TCB_STACKF 32
+        #define TCB_STACKF 37
         #define TCB_TSTACK 40
 
         EXTERN  os_flags
@@ -146,11 +146,6 @@ _free_box:
         PUBLIC  SVC_Handler
 SVC_Handler:
 
-#ifdef IFX_XMC4XXX
-        PUBLIC  SVC_Handler_Veneer
-SVC_Handler_Veneer:
-#endif
-
         MRS     R0,PSP                  /* Read PSP */
         LDR     R1,[R0,#24]             /* Read Saved PC from Stack */
         LDRB    R1,[R1,#-2]             /* Load SVC Number */
@@ -167,14 +162,8 @@ SVC_Handler_Veneer:
         LDR     R3,=os_tsk
         LDM     R3,{R1,R2}              /* os_tsk.run, os_tsk.new */
         CMP     R1,R2
-#ifdef  IFX_XMC4XXX
-        ITT      EQ
-        PUSHEQ  {LR}
-        POPEQ   {PC}
-#else
         IT      EQ
         BXEQ    LR                      /* RETI, no task switch */
-#endif
 
         CBZ     R1,SVC_Next             /* Runtask deleted? */
         TST     LR,#0x10                /* is it extended frame? */
@@ -204,12 +193,7 @@ SVC_Next:
         MSR     PSP,R12                 /* Write PSP */
 
 SVC_Exit:
-#ifdef  IFX_XMC4XXX
-        PUSH    {LR}
-        POP     {PC}
-#else
         BX      LR
-#endif
 
         /*------------------- User SVC ------------------------------*/
 
@@ -230,7 +214,7 @@ SVC_User:
         STM     R12,{R0-R3}             /* Function return values */
 SVC_Done:
         POP     {R4,PC}                 /* RETI */
-
+        
 
 /*-------------------------- PendSV_Handler ---------------------------------*/
 
@@ -238,11 +222,6 @@ SVC_Done:
 
         PUBLIC  PendSV_Handler
 PendSV_Handler:
-
-#ifdef  IFX_XMC4XXX
-        PUBLIC  PendSV_Handler_Veneer
-PendSV_Handler_Veneer:
-#endif
 
         PUSH    {R4,LR}                 /* Save EXC_RETURN */
         BL      rt_pop_req
@@ -253,14 +232,8 @@ Sys_Switch:
         LDR     R3,=os_tsk
         LDM     R3,{R1,R2}              /* os_tsk.run, os_tsk.new */
         CMP     R1,R2
-#ifdef  IFX_XMC4XXX
-        ITT     EQ
-        PUSHEQ  {LR}
-        POPEQ   {PC}
-#else
         IT      EQ
         BXEQ    LR                      /* RETI, no task switch */
-#endif
 
         MRS     R12,PSP                 /* Read PSP */
         TST     LR,#0x10                /* is it extended frame? */
@@ -289,12 +262,7 @@ Sys_Switch:
         MSR     PSP,R12                 /* Write PSP */
 
 Sys_Exit:
-#ifdef  IFX_XMC4XXX
-        PUSH    {LR}
-        POP     {PC}
-#else
         BX      LR                      /* Return to Thread Mode */
-#endif
 
 
 /*-------------------------- SysTick_Handler --------------------------------*/
@@ -303,10 +271,6 @@ Sys_Exit:
 
         PUBLIC  SysTick_Handler
 SysTick_Handler:
-#ifdef  IFX_XMC4XXX
-        PUBLIC  SysTick_Handler_Veneer
-SysTick_Handler_Veneer:
-#endif
 
         PUSH    {R4,LR}                 /* Save EXC_RETURN */
         BL      rt_systick

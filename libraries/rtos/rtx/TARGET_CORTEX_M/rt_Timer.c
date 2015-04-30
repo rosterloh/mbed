@@ -1,8 +1,8 @@
 /*----------------------------------------------------------------------------
  *      CMSIS-RTOS  -  RTX
  *----------------------------------------------------------------------------
- *      Name:    RT_ROBIN.C
- *      Purpose: Round Robin Task switching
+ *      Name:    RT_TIMER.C
+ *      Purpose: User timer functions
  *      Rev.:    V4.70
  *----------------------------------------------------------------------------
  *
@@ -34,51 +34,101 @@
 
 #include "rt_TypeDef.h"
 #include "RTX_Config.h"
-#include "rt_List.h"
-#include "rt_Task.h"
-#include "rt_Time.h"
-#include "rt_Robin.h"
-#include "rt_HAL_CM.h"
+#include "rt_Timer.h"
+#include "rt_MemBox.h"
+
+#ifndef __CMSIS_RTOS
+
 
 /*----------------------------------------------------------------------------
  *      Global Variables
  *---------------------------------------------------------------------------*/
 
-struct OS_ROBIN os_robin;
-
+/* User Timer list pointer */
+struct OS_XTMR os_tmr;
 
 /*----------------------------------------------------------------------------
- *      Global Functions
+ *      Functions
  *---------------------------------------------------------------------------*/
 
-/*--------------------------- rt_init_robin ---------------------------------*/
+/*--------------------------- rt_tmr_tick -----------------------------------*/
 
-__weak void rt_init_robin (void) {
-  /* Initialize Round Robin variables. */
-  os_robin.task = NULL;
-  os_robin.tout = (U16)os_rrobin;
-}
+void rt_tmr_tick (void) {
+  /* Decrement delta count of timer list head. Timers having the value of   */
+  /* zero are removed from the list and the callback function is called.    */
+  P_TMR p;
 
-/*--------------------------- rt_chk_robin ----------------------------------*/
-
-__weak void rt_chk_robin (void) {
-  /* Check if Round Robin timeout expired and switch to the next ready task.*/
-  P_TCB p_new;
-
-  if (os_robin.task != os_rdy.p_lnk) {
-    /* New task was suspended, reset Round Robin timeout. */
-    os_robin.task = os_rdy.p_lnk;
-    os_robin.time = (U16)os_time + os_robin.tout - 1;
+  if (os_tmr.next == NULL) {
+    return;
   }
-  if (os_robin.time == (U16)os_time) {
-    /* Round Robin timeout has expired, swap Robin tasks. */
-    os_robin.task = NULL;
-    p_new = rt_get_first (&os_rdy);
-    rt_put_prio ((P_XCB)&os_rdy, p_new);
+  os_tmr.tcnt--;
+  while (os_tmr.tcnt == 0 && (p = os_tmr.next) != NULL) {
+    /* Call a user provided function to handle an elapsed timer */
+    os_tmr_call (p->info);
+    os_tmr.tcnt = p->tcnt;
+    os_tmr.next = p->next;
+    rt_free_box ((U32 *)m_tmr, p);
   }
 }
+
+/*--------------------------- rt_tmr_create ---------------------------------*/
+
+OS_ID rt_tmr_create (U16 tcnt, U16 info)  {
+  /* Create an user timer and put it into the chained timer list using      */
+  /* a timeout count value of "tcnt". User parameter "info" is used as a    */
+  /* parameter for the user provided callback function "os_tmr_call ()".    */
+  P_TMR p_tmr, p;
+  U32 delta,itcnt = tcnt;
+
+  if (tcnt == 0 || m_tmr == NULL)  {
+    return (NULL);
+  }
+  p_tmr = rt_alloc_box ((U32 *)m_tmr);
+  if (!p_tmr)  {
+    return (NULL);
+  }
+  p_tmr->info = info;
+  p = (P_TMR)&os_tmr;
+  delta = p->tcnt;
+  while (delta < itcnt && p->next != NULL) {
+    p = p->next;
+    delta += p->tcnt;
+  }
+  /* Right place found, insert timer into the list */
+  p_tmr->next = p->next;
+  p_tmr->tcnt = (U16)(delta - itcnt);
+  p->next = p_tmr;
+  p->tcnt -= p_tmr->tcnt;
+  return (p_tmr);
+}
+
+/*--------------------------- rt_tmr_kill -----------------------------------*/
+
+OS_ID rt_tmr_kill (OS_ID timer)  {
+  /* Remove user timer from the chained timer list. */
+  P_TMR p, p_tmr;
+
+  p_tmr = (P_TMR)timer;
+  p = (P_TMR)&os_tmr;
+  /* Search timer list for requested timer */
+  while (p->next != p_tmr)  {
+    if (p->next == NULL) {
+      /* Failed, "timer" is not in the timer list */
+      return (p_tmr);
+    }
+    p = p->next;
+  }
+  /* Timer was found, remove it from the list */
+  p->next = p_tmr->next;
+  p->tcnt += p_tmr->tcnt;
+  rt_free_box ((U32 *)m_tmr, p_tmr);
+  /* Timer killed */
+  return (NULL);
+}
+
+
+#endif
 
 /*----------------------------------------------------------------------------
  * end of file
  *---------------------------------------------------------------------------*/
-

@@ -1,8 +1,8 @@
 /*----------------------------------------------------------------------------
  *      CMSIS-RTOS  -  RTX
  *----------------------------------------------------------------------------
- *      Name:    RT_ROBIN.C
- *      Purpose: Round Robin Task switching
+ *      Name:    RT_MEMORY.H
+ *      Purpose: Interface functions for Dynamic Memory Management System
  *      Rev.:    V4.70
  *----------------------------------------------------------------------------
  *
@@ -32,53 +32,13 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*/
 
-#include "rt_TypeDef.h"
-#include "RTX_Config.h"
-#include "rt_List.h"
-#include "rt_Task.h"
-#include "rt_Time.h"
-#include "rt_Robin.h"
-#include "rt_HAL_CM.h"
+/* Types */
+typedef struct mem {              /* << Memory Pool management struct >>     */
+  struct mem *next;               /* Next Memory Block in the list           */
+  U32         len;                /* Length of data block                    */
+} MEMP;
 
-/*----------------------------------------------------------------------------
- *      Global Variables
- *---------------------------------------------------------------------------*/
-
-struct OS_ROBIN os_robin;
-
-
-/*----------------------------------------------------------------------------
- *      Global Functions
- *---------------------------------------------------------------------------*/
-
-/*--------------------------- rt_init_robin ---------------------------------*/
-
-__weak void rt_init_robin (void) {
-  /* Initialize Round Robin variables. */
-  os_robin.task = NULL;
-  os_robin.tout = (U16)os_rrobin;
-}
-
-/*--------------------------- rt_chk_robin ----------------------------------*/
-
-__weak void rt_chk_robin (void) {
-  /* Check if Round Robin timeout expired and switch to the next ready task.*/
-  P_TCB p_new;
-
-  if (os_robin.task != os_rdy.p_lnk) {
-    /* New task was suspended, reset Round Robin timeout. */
-    os_robin.task = os_rdy.p_lnk;
-    os_robin.time = (U16)os_time + os_robin.tout - 1;
-  }
-  if (os_robin.time == (U16)os_time) {
-    /* Round Robin timeout has expired, swap Robin tasks. */
-    os_robin.task = NULL;
-    p_new = rt_get_first (&os_rdy);
-    rt_put_prio ((P_XCB)&os_rdy, p_new);
-  }
-}
-
-/*----------------------------------------------------------------------------
- * end of file
- *---------------------------------------------------------------------------*/
-
+/* Functions */
+extern int   rt_init_mem  (void *pool, U32  size);
+extern void *rt_alloc_mem (void *pool, U32  size);
+extern int   rt_free_mem  (void *pool, void *mem);

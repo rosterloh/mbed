@@ -31,20 +31,20 @@ Thread::Thread(void (*task)(void const *argument), void *argument,
     _thread_def.pthread = task;
     _thread_def.tpriority = priority;
     _thread_def.stacksize = stack_size;
-    if (stack_pointer != NULL) {
-        _thread_def.stack_pointer = (uint32_t*)stack_pointer;
-        _dynamic_stack = false;
-    } else {
-        _thread_def.stack_pointer = new uint32_t[stack_size/sizeof(uint32_t)];
-        if (_thread_def.stack_pointer == NULL)
-            error("Error allocating the stack memory\n");
-        _dynamic_stack = true;
-    }
-    
+    //if (stack_pointer != NULL) {
+    //    _thread_def.stack_pointer = (uint32_t*)stack_pointer;
+    //    _dynamic_stack = false;
+    //} else {
+    //    _thread_def.stack_pointer = new uint32_t[stack_size/sizeof(uint32_t)];
+    //    if (_thread_def.stack_pointer == NULL)
+    //        error("Error allocating the stack memory\n");
+    //    _dynamic_stack = true;
+    //}
+
     //Fill the stack with a magic word for maximum usage checking
-    for (int i = 0; i < (stack_size / sizeof(uint32_t)); i++) {
-        _thread_def.stack_pointer[i] = 0xE25A2EA5;
-    }
+    //for (int i = 0; i < (stack_size / sizeof(uint32_t)); i++) {
+    //    _thread_def.stack_pointer[i] = 0xE25A2EA5;
+    //}
 #endif
     _tid = osThreadCreate(&_thread_def, argument);
 }
@@ -70,13 +70,9 @@ int32_t Thread::signal_clr(int32_t signals) {
 }
 
 Thread::State Thread::get_state() {
-#ifndef __MBED_CMSIS_RTOS_CA9
-    return ((State)_thread_def.tcb.state);
-#else
     uint8_t status;
     status = osThreadGetState(_tid);
     return ((State)status);
-#endif
 }
 
 uint32_t Thread::stack_size() {
@@ -134,9 +130,9 @@ osThreadId Thread::gettid() {
 
 Thread::~Thread() {
     terminate();
-    if (_dynamic_stack) {
-        delete[] (_thread_def.stack_pointer);
-    }
+    //if (_dynamic_stack) {
+    //    delete[] (_thread_def.stack_pointer);
+    //}
 }
 
 }

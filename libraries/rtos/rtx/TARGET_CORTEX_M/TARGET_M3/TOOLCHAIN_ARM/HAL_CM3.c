@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------
- *      RL-ARM - RTX
+ *      CMSIS-RTOS  -  RTX
  *----------------------------------------------------------------------------
  *      Name:    HAL_CM3.C
  *      Purpose: Hardware Abstraction Layer for Cortex-M3
- *      Rev.:    V4.60
+ *      Rev.:    V4.70
  *----------------------------------------------------------------------------
  *
- * Copyright (c) 1999-2009 KEIL, 2009-2012 ARM Germany GmbH
+ * Copyright (c) 1999-2009 KEIL, 2009-2013 ARM Germany GmbH
  * All rights reserved.
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -15,25 +15,25 @@
  *  - Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- *  - Neither the name of ARM  nor the names of its contributors may be used
- *    to endorse or promote products derived from this software without
+ *  - Neither the name of ARM  nor the names of its contributors may be used 
+ *    to endorse or promote products derived from this software without 
  *    specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" 
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDERS AND CONTRIBUTORS BE
  * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*/
 
 #include "rt_TypeDef.h"
-#include "RTX_Conf.h"
+#include "RTX_Config.h"
 #include "rt_System.h"
 #include "rt_HAL_CM.h"
 #include "rt_Task.h"
@@ -124,13 +124,18 @@ __asm void SVC_Handler (void) {
         IMPORT  SVC_Table
         IMPORT  rt_stk_check
 
+#ifdef  IFX_XMC4XXX
+        EXPORT  SVC_Handler_Veneer
+SVC_Handler_Veneer        
+#endif
+
         MRS     R0,PSP                  ; Read PSP
         LDR     R1,[R0,#24]             ; Read Saved PC from Stack
         LDRB    R1,[R1,#-2]             ; Load SVC Number
         CBNZ    R1,SVC_User
 
         LDM     R0,{R0-R3,R12}          ; Read R0-R3,R12 from stack
-        BLX     R12                     ; Call SVC Function
+        BLX     R12                     ; Call SVC Function 
 
         MRS     R12,PSP                 ; Read PSP
         STM     R12,{R0-R2}             ; Store return values
@@ -157,7 +162,12 @@ SVC_Next
 
 SVC_Exit
         MVN     LR,#:NOT:0xFFFFFFFD     ; set EXC_RETURN value
+#ifdef  IFX_XMC4XXX
+        PUSH    {LR}
+        POP     {PC}
+#else
         BX      LR
+#endif
 
         /*------------------- User SVC ------------------------------*/
 
@@ -188,6 +198,11 @@ SVC_Done
 __asm void PendSV_Handler (void) {
         PRESERVE8
 
+#ifdef  IFX_XMC4XXX
+        EXPORT  PendSV_Handler_Veneer
+PendSV_Handler_Veneer        
+#endif
+
         BL      __cpp(rt_pop_req)
 
 Sys_Switch
@@ -212,7 +227,12 @@ Sys_Switch
 
 Sys_Exit
         MVN     LR,#:NOT:0xFFFFFFFD     ; set EXC_RETURN value
+#ifdef  IFX_XMC4XXX
+        PUSH    {LR}
+        POP     {PC}
+#else
         BX      LR                      ; Return to Thread Mode
+#endif
 
         ALIGN
 }
@@ -222,6 +242,11 @@ Sys_Exit
 
 __asm void SysTick_Handler (void) {
         PRESERVE8
+
+#ifdef  IFX_XMC4XXX
+        EXPORT  SysTick_Handler_Veneer
+SysTick_Handler_Veneer        
+#endif
 
         BL      __cpp(rt_systick)
         B       Sys_Switch

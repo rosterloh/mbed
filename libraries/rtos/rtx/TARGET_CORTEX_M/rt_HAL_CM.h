@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------
- *      RL-ARM - RTX
+ *      CMSIS-RTOS  -  RTX
  *----------------------------------------------------------------------------
  *      Name:    RT_HAL_CM.H
  *      Purpose: Hardware Abstraction Layer for Cortex-M definitions
- *      Rev.:    V4.60
+ *      Rev.:    V4.77
  *----------------------------------------------------------------------------
  *
- * Copyright (c) 1999-2009 KEIL, 2009-2012 ARM Germany GmbH
+ * Copyright (c) 1999-2009 KEIL, 2009-2015 ARM Germany GmbH
  * All rights reserved.
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -15,19 +15,19 @@
  *  - Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- *  - Neither the name of ARM  nor the names of its contributors may be used
- *    to endorse or promote products derived from this software without
+ *  - Neither the name of ARM  nor the names of its contributors may be used 
+ *    to endorse or promote products derived from this software without 
  *    specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" 
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDERS AND CONTRIBUTORS BE
  * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*/
@@ -37,10 +37,11 @@
 #define DEMCR_TRCENA    0x01000000
 #define ITM_ITMENA      0x00000001
 #define MAGIC_WORD      0xE25A2EA5
+#define MAGIC_PATTERN   0xCCCCCCCC
 
 #if defined (__CC_ARM)          /* ARM Compiler */
 
-#if ((__TARGET_ARCH_7_M || __TARGET_ARCH_7E_M) && !NO_EXCLUSIVE_ACCESS)
+#if ((__TARGET_ARCH_7_M || __TARGET_ARCH_7E_M) && !defined(NO_EXCLUSIVE_ACCESS))
  #define __USE_EXCLUSIVE_ACCESS
 #else
  #undef  __USE_EXCLUSIVE_ACCESS
@@ -86,7 +87,7 @@ __attribute__((always_inline)) static inline U32 __disable_irq(void)
 __attribute__(( always_inline)) static inline U8 __clz(U32 value)
 {
   U8 result;
-
+  
   __asm volatile ("clz %0, %1" : "=r" (result) : "r" (value));
   return(result);
 }
@@ -119,7 +120,7 @@ static inline void __enable_irq(void)
 static inline U32 __disable_irq(void)
 {
   U32 result;
-
+  
   __asm volatile ("mrs %0, primask" : "=r" (result));
   __asm volatile ("cpsid i");
   return(result & 1);
@@ -130,7 +131,7 @@ static inline U32 __disable_irq(void)
 static inline U8 __clz(U32 value)
 {
   U8 result;
-
+  
   __asm volatile ("clz %0, %1" : "=r" (result) : "r" (value));
   return(result);
 }
@@ -214,7 +215,7 @@ __inline static U32 rt_inc_qi (U32 size, U8 *count, U8 *first) {
     *count = cnt+1;
     c2 = (cnt = *first) + 1;
     if (c2 == size) c2 = 0;
-    *first = c2;
+    *first = c2; 
   }
   __enable_irq ();
 #endif
@@ -226,6 +227,14 @@ __inline static void rt_systick_init (void) {
   NVIC_ST_CURRENT = 0;
   NVIC_ST_CTRL    = 0x0007;
   NVIC_SYS_PRI3  |= 0xFF000000;
+}
+
+__inline static U32 rt_systick_val (void) {
+  return (os_trv - NVIC_ST_CURRENT);
+}
+
+__inline static U32 rt_systick_ovf (void) {
+  return ((NVIC_INT_CTRL >> 26) & 1);
 }
 
 __inline static void rt_svc_init (void) {
@@ -262,7 +271,7 @@ extern void dbg_task_switch (U32 task_id);
 #ifdef DBG_MSG
 #define DBG_INIT() dbg_init()
 #define DBG_TASK_NOTIFY(p_tcb,create) if (dbg_msg) dbg_task_notify(p_tcb,create)
-#define DBG_TASK_SWITCH(task_id)      if (dbg_msg && (os_tsk.new_tsk != os_tsk.run)) \
+#define DBG_TASK_SWITCH(task_id)      if (dbg_msg && (os_tsk.new!=os_tsk.run)) \
                                                    dbg_task_switch(task_id)
 #else
 #define DBG_INIT()

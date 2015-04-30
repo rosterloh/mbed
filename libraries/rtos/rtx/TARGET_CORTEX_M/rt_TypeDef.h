@@ -1,12 +1,12 @@
 /*----------------------------------------------------------------------------
- *      RL-ARM - RTX
+ *      CMSIS-RTOS  -  RTX
  *----------------------------------------------------------------------------
  *      Name:    RT_TYPEDEF.H
  *      Purpose: Type Definitions
- *      Rev.:    V4.60
+ *      Rev.:    V4.73
  *----------------------------------------------------------------------------
  *
- * Copyright (c) 1999-2009 KEIL, 2009-2012 ARM Germany GmbH
+ * Copyright (c) 1999-2009 KEIL, 2009-2013 ARM Germany GmbH
  * All rights reserved.
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -15,32 +15,69 @@
  *  - Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- *  - Neither the name of ARM  nor the names of its contributors may be used
- *    to endorse or promote products derived from this software without
+ *  - Neither the name of ARM  nor the names of its contributors may be used 
+ *    to endorse or promote products derived from this software without 
  *    specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" 
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
  * ARE DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDERS AND CONTRIBUTORS BE
  * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*/
-#ifndef RT_TYPE_DEF_H
-#define RT_TYPE_DEF_H
 
-#include "os_tcb.h"
+/* Types */
+typedef char               S8;
+typedef unsigned char      U8;
+typedef short              S16;
+typedef unsigned short     U16;
+typedef int                S32;
+typedef unsigned int       U32;
+typedef long long          S64;
+typedef unsigned long long U64;
+typedef unsigned char      BIT;
+typedef unsigned int       BOOL;
+typedef void               (*FUNCP)(void);
 
 typedef U32     OS_TID;
 typedef void    *OS_ID;
 typedef U32     OS_RESULT;
 
-#define TCB_STACKF      32        /* 'stack_frame' offset                    */
+typedef struct OS_TCB {
+  /* General part: identical for all implementations.                        */
+  U8     cb_type;                 /* Control Block Type                      */
+  U8     state;                   /* Task state                              */
+  U8     prio;                    /* Execution priority                      */
+  U8     task_id;                 /* Task ID value for optimized TCB access  */
+  struct OS_TCB *p_lnk;           /* Link pointer for ready/sem. wait list   */
+  struct OS_TCB *p_rlnk;          /* Link pointer for sem./mbx lst backwards */
+  struct OS_TCB *p_dlnk;          /* Link pointer for delay list             */
+  struct OS_TCB *p_blnk;          /* Link pointer for delay list backwards   */
+  U16    delta_time;              /* Time until time out                     */
+  U16    interval_time;           /* Time interval for periodic waits        */
+  U16    events;                  /* Event flags                             */
+  U16    waits;                   /* Wait flags                              */
+  void   **msg;                   /* Direct message passing when task waits  */
+  struct OS_MUCB *p_mlnk;         /* Link pointer for mutex owner list       */
+  U8     prio_base;               /* Base priority                           */
+
+  /* Hardware dependant part: specific for CM processor                      */
+  U8     stack_frame;             /* Stack frame: 0=Basic, 1=Extended,       */
+                                  /* (2=VFP/D16 stacked, 4=NEON/D32 stacked) */
+  U16    priv_stack;              /* Private stack size, 0= system assigned  */
+  U32    tsk_stack;               /* Current task Stack pointer (R13)        */
+  U32    *stack;                  /* Pointer to Task Stack memory block      */
+
+  /* Task entry point used for uVision debugger                              */
+  FUNCP  ptask;                   /* Task entry address                      */
+} *P_TCB;
+#define TCB_STACKF      37        /* 'stack_frame' offset                    */
 #define TCB_TSTACK      40        /* 'tsk_stack' offset                      */
 
 typedef struct OS_PSFE {          /* Post Service Fifo Entry                 */
@@ -58,7 +95,7 @@ typedef struct OS_PSQ {           /* Post Service Queue                      */
 
 typedef struct OS_TSK {
   P_TCB  run;                     /* Current running task                    */
-  P_TCB  new_tsk;                 /* Scheduled task to run                   */
+  P_TCB  new;                     /* Scheduled task to run                   */
 } *P_TSK;
 
 typedef struct OS_ROBIN {         /* Round Robin Control                     */
@@ -97,10 +134,10 @@ typedef struct OS_SCB {
 
 typedef struct OS_MUCB {
   U8     cb_type;                 /* Control Block Type                      */
-  U8     prio;                    /* Owner task default priority             */
   U16    level;                   /* Call nesting level                      */
   struct OS_TCB *p_lnk;           /* Chain of tasks waiting for mutex        */
   struct OS_TCB *owner;           /* Mutex owner task                        */
+  struct OS_MUCB *p_mlnk;         /* Chain of mutexes by owner task          */
 } *P_MUCB;
 
 typedef struct OS_XTMR {
@@ -125,4 +162,7 @@ typedef struct OS_BM {
 #define __FALSE         0
 #define NULL            ((void *) 0)
 
-#endif
+/*----------------------------------------------------------------------------
+ * end of file
+ *---------------------------------------------------------------------------*/
+
